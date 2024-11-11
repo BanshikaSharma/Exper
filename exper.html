@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hubstaff To-Do List with Notes and Task Time Tracking</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet"/>
+</head>
+<body class="bg-pink-50 text-gray-800 font-sans">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-1/4 bg-pink-100 border-r border-pink-300 shadow-lg p-4">
+            <div class="flex items-center mb-4">
+                <img alt="Hubstaff logo" class="mr-2" height="24" src="https://storage.googleapis.com/a1aa/image/fZIu06WBou2QASGxl6usnzLbCl5NJQO14RhOEE9B5iGL6T3JA.jpg" width="24"/>
+                <span class="text-lg font-semibold">Hubstaff</span>
+            </div>
+
+            <!-- Task Timer -->
+            <div class="text-center mb-4">
+                <div id="noteTimer" class="text-2xl font-bold bg-white text-gray-800 shadow-md py-2 rounded">
+                    00:00:00
+                </div>
+                <button id="noteTimerButton" class="mt-4 bg-pink-300 text-gray-800 rounded-full p-4 shadow hover:bg-blue-400 transition duration-200" onclick="toggleNoteTimer()">
+                    Hubstaff Timer
+                </button>
+                <div class="text-lg font-semibold mt-2" id="currentTask">Add task</div>
+                <button id="timerButton" class="mt-4 bg-pink-300 text-gray-800 rounded-full p-4 shadow hover:bg-pink-400 transition duration-200" onclick="toggleTimer()">
+                    Task Start
+                </button>
+            </div>
+         
+             <div class="relative mb-4">
+                <input class="w-full border border-pink-300 rounded p-2 bg-white text-gray-800 shadow" placeholder="Search" type="text" id="search" oninput="filterTodos()"/>
+                <i class="fas fa-search absolute right-3 top-3 text-pink-500"></i>
+            </div>
+            <form id="todoForm" onsubmit="addTodo(event)">
+                <input class="w-full border border-pink-300 rounded p-2 mb-2 bg-white text-gray-800 shadow" name="todo_content" placeholder="Add a new to-do" type="text" required/>
+                <textarea class="w-full border border-pink-300 rounded p-2 mb-2 bg-white text-gray-800 shadow" name="todo_notes" placeholder="Add notes for this task" rows="3"></textarea>
+                <button class="bg-pink-300 text-gray-800 rounded-full p-2 w-full shadow hover:bg-pink-400 transition duration-200 flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i> Add Todo
+                </button>
+            </form>
+            <div class="mb-4">
+                <label for="filter" class="text-lg font-semibold">Filter:</label>
+                <select id="filter" class="border border-pink-300 rounded p-2 w-full bg-white text-gray-800 shadow" onchange="filterTodos()">
+                    <option value="all">All to-dos</option>
+                    <option value="completed">Completed</option>
+                    <option value="incomplete">Incomplete</option>
+                </select>
+            </div>
+        </div>
+        <!-- Main Content -->
+        <div class="w-3/4 p-4 bg-white shadow-lg">
+            <!-- Total Time Spent Box -->
+            <div class="bg-pink-200 p-4 rounded-lg shadow-md mb-4">
+                <h3 class="text-lg font-semibold">Task Time:</h3>
+                <div id="totalTime" class="text-3xl font-bold">00:00:00</div>
+            </div>
+
+            <div class="flex justify-between items-center mb-4">
+                <div class="text-lg font-semibold">To-dos</div>
+                <div class ="flex items-center">
+                    <input class="border border-pink-300 rounded p-2 mr-2 bg-white text-gray-800 shadow" placeholder="Search to-dos" type="text" id="todoSearch" oninput="filterTodos()"/>
+                    <button class="bg-pink-300 text-gray-800 rounded p-2 shadow hover:bg-pink-400 transition duration-200 flex items-center">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="border border-pink-300 rounded p-4 bg-white shadow">
+                <div id="todoList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let timerRunning = false;
+        let noteTimerRunning = false;
+        let timerInterval;
+        let noteTimerInterval;
+        let currentTaskId = null;
+        let todos = [];
+        let totalTime = 0;
+        let noteTime = 0;
+
+        function addTodo(event) {
+            event.preventDefault();
+            const todoContent = event.target.todo_content.value;
+            const todoNotes = event.target.todo_notes.value;
+            const newTodo = {
+                id: todos.length,
+                content: todoContent,
+                notes: todoNotes,
+                timeSpent: 0,
+                date: new Date().toLocaleString(),
+                timer: null
+            };
+            todos.push(newTodo);
+            event.target.reset();
+            renderTodos();
+        }
+
+        function toggleTimer() {
+            if (currentTaskId === null) return; // No task selected
+            if (timerRunning) {
+                stopTimer();
+            } else {
+                startTimer();
+            }
+        }
+
+        function toggleNoteTimer() {
+            if (noteTimerRunning) {
+                stopNoteTimer();
+            } else {
+                startNoteTimer();
+            }
+        }
+
+        function selectTask(id) {
+            if (currentTaskId !== null) {
+                stopTimer(); // Stop the previous task timer if any
+            }
+            currentTaskId = id;
+            document.getElementById('currentTask').textContent = todos[id].content;
+            startTimer(); // Start timer for the selected task
+        }
+
+        function startTimer() {
+            if (!timerRunning) {
+                timerRunning = true;
+                timerInterval = setInterval(() => {
+                    todos[currentTaskId].timeSpent += 1; // Increment time spent for the current task
+                    updateTotalTime(); // Update total time
+                    renderTodos(); // Re-render todos to show updated time
+                }, 1000);
+                document.getElementById('timerButton').textContent = 'Stop';
+            }
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timerRunning = false;
+            document.getElementById('timerButton').textContent = 'Start';
+        }
+
+        function startNoteTimer() {
+            if (!noteTimerRunning) {
+                noteTimerRunning = true;
+                noteTimerInterval = setInterval(() => {
+                    noteTime += 1; // Increment note timer
+                    updateNoteTime(); // Update note timer display
+                }, 1000);
+                document.getElementById('noteTimerButton').textContent = 'Stop Note Timer';
+            }
+        }
+
+        function stopNoteTimer() {
+            clearInterval(noteTimerInterval);
+            noteTimerRunning = false;
+            document.getElementById('noteTimerButton').textContent = 'Start Note Timer';
+        }
+
+        function updateTotalTime() {
+            totalTime = todos.reduce((acc, todo) => acc + todo.timeSpent, 0); // Calculate total time spent
+            const hours = String(Math.floor(totalTime / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((totalTime % 3600) / 60)).padStart(2, '0');
+            const seconds = String(totalTime % 60).padStart(2, '0');
+            document.getElementById('totalTime').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        function updateNoteTime() {
+            const hours = String(Math.floor(noteTime / 3600)).padStart(2, '0');
+            const minutes = String(Math.floor((noteTime % 3600) / 60)).padStart (2, '0');
+            const seconds = String(noteTime % 60).padStart(2, '0');
+            document.getElementById('noteTimer').textContent = `${hours}:${minutes}:${seconds}`;
+        }
+
+        function renderTodos() {
+            const todoList = document.getElementById('todoList');
+            todoList.innerHTML = ''; // Clear existing todos
+
+            todos.forEach(todo => {
+                const hours = String(Math.floor(todo.timeSpent / 3600)).padStart(2, '0');
+                const minutes = String(Math.floor((todo.timeSpent % 3600) / 60)).padStart(2, '0');
+                const seconds = String(todo.timeSpent % 60).padStart(2, '0');
+
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex flex-col justify-between items-start bg-pink-200 p-2 rounded shadow todo-item mb-2';
+                todoItem.innerHTML = `
+                    <span>${todo.date} - ${todo.content} (Time: ${hours}:${minutes}:${seconds})</span>
+                    <span class="text-gray-600 italic">Notes: ${todo.notes}</span>
+                    <div class="flex justify-between w-full mt-2">
+                        <button onclick="selectTask(${todo.id})" class="text-blue-500 hover:text-blue-700 transition duration-200">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button onclick="deleteTodo(${todo.id})" class="text-red-500 hover:text-red-700 transition duration-200">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                todoList.appendChild(todoItem);
+            });
+        }
+
+        function deleteTodo(id) {
+            todos.splice(id, 1);
+            if (currentTaskId === id) {
+                stopTimer();
+                currentTaskId = null;
+                document.getElementById('currentTask').textContent = 'No task selected';
+            }
+            renderTodos();
+        }
+
+        function filterTodos() {
+            const searchInput = document.getElementById('todoSearch').value.toLowerCase();
+            const filterValue = document.getElementById('filter').value;
+
+            const filteredTodos = todos.filter(todo => {
+                const matchesSearch = todo.content.toLowerCase().includes(searchInput);
+                return matchesSearch;
+            });
+
+            const todoList = document.getElementById('todoList');
+            todoList.innerHTML = '';
+            filteredTodos.forEach(todo => {
+                const hours = String(Math.floor(todo.timeSpent / 3600)).padStart(2, '0');
+                const minutes = String(Math.floor((todo.timeSpent % 3600) / 60)).padStart(2, '0');
+                const seconds = String(todo.timeSpent % 60).padStart(2, '0');
+
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex flex-col justify-between items-start bg-pink-200 p-2 rounded shadow todo-item mb-2';
+                todoItem.innerHTML = `
+                           <span>${todo.date} - ${todo.content} (Time: ${hours}:${minutes}:${seconds})</span>
+                    <button onclick="selectTask(${todo.id})" class="text-blue-500 hover:text-blue-700 transition duration-200">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button onclick="deleteTodo(${todo.id})" class="text-red-500 hover:text-red-700 transition duration-200">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                `;
+                todoList.appendChild(todoItem);
+            });
+        }
+    </script>
+</body>
+</html>
